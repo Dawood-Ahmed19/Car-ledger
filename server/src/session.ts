@@ -70,3 +70,23 @@ export const requireRole =
     roles.includes(req.user!.role)
       ? next()
       : res.status(403).json({ error: "You do not have access to this." });
+
+export async function userFromToken(token: string) {
+  const session = await prisma.session.findFirst({
+    where: {
+      tokenHash: hashToken(token),
+      expiresAt: { gt: new Date() },
+    },
+    select: {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          fullName: true,
+          role: true,
+        },
+      },
+    },
+  });
+  return session?.user ?? null;
+}

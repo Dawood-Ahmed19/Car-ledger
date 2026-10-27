@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -27,16 +26,20 @@ enum ListingStatus {
 }
 
 model User {
-  id           String    @id @default(uuid()) @db.Uuid
-  email        String    @unique
-  username     String    @unique
-  fullName     String    @map("full_name")
-  phone        String?
-  passwordHash String    @map("password_hash")
-  role         Role      @default(buyer)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  sessions     Session[]
-  listings     Listing[]
+  id                  String         @id @default(uuid()) @db.Uuid
+  email               String         @unique
+  username            String         @unique
+  fullName            String         @map("full_name")
+  phone               String?
+  passwordHash        String         @map("password_hash")
+  role                Role           @default(buyer)
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  sessions            Session[]
+  listings            Listing[]
+  pushTokens PushToken[]
+  buyerConversations  Conversation[] @relation("BuyerConversations")
+  sellerConversations Conversation[] @relation("SellerConversations")
+  messages            Message[]
 
   @@map("users")
 }
@@ -54,20 +57,68 @@ model Session {
 }
 
 model Listing {
-  id        String        @id @default(uuid()) @db.Uuid
-  title     String
-  price     Int
-  mileageKm Int           @map("mileage_km")
-  city      String
-  about     String        @default("")
-  status    ListingStatus @default(not_checked)
-  evidence  String[]
-  photos    String[]
-  sellerId  String        @map("seller_id") @db.Uuid
-  seller    User          @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  id            String         @id @default(uuid()) @db.Uuid
+  title         String
+  price         Int
+  mileageKm     Int            @map("mileage_km")
+  city          String
+  about         String         @default("")
+  status        ListingStatus  @default(not_checked)
+  evidence      String[]
+  photos        String[]
+  conversations Conversation[]
+  sellerId      String         @map("seller_id") @db.Uuid
+  seller        User           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([createdAt])
   @@index([sellerId])
   @@map("listings")
+}
+
+model Conversation {
+  id             String   @id @default(uuid()) @db.Uuid
+  listingId      String   @map("listing_id") @db.Uuid
+  buyerId        String   @map("buyer_id") @db.Uuid
+  sellerId       String   @map("seller_id") @db.Uuid
+  buyerArchived  Boolean  @default(false) @map("buyer_archived")
+  sellerArchived Boolean  @default(false) @map("seller_archived")
+  lastMessageAt  DateTime @default(now()) @map("last_message_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  listing  Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer    User      @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller   User      @relation("SellerConversations", fields: [sellerId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([listingId, buyerId])
+  @@index([buyerId, lastMessageAt])
+  @@index([sellerId, lastMessageAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String    @id @default(uuid()) @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  senderId       String    @map("sender_id") @db.Uuid
+  body           String
+  readAt         DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model PushToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_tokens")
 }
