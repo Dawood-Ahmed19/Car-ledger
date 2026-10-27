@@ -63,6 +63,8 @@ model Listing {
   mileageKm     Int            @map("mileage_km")
   city          String
   about         String         @default("")
+  bodyType      String?        @map("body_type")
+  fuelType      String?        @map("fuel_type")
   status        ListingStatus  @default(not_checked)
   evidence      String[]
   photos        String[]

@@ -22,6 +22,7 @@ app.use("/uploads", express.static("uploads"));
 app.use("/api/listings", listingsRouter);
 app.use("/api/conversations", requireAuth, conversationsRouter);
 app.use("/api/push-token", requireAuth, pushRouter);
+app.use("/api/listings", listingsRouter);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found." }));
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

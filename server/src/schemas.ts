@@ -29,19 +29,29 @@ export const createListingSchema = z.object({
     .int()
     .min(1990, "Enter a valid model year.")
     .max(new Date().getFullYear() + 1, "Enter a valid model year."),
+
   makeModel: z.string().trim().min(3, "Enter the make and model.").max(80),
+
   price: z.coerce
     .number()
     .int()
     .positive("Enter the asking price.")
     .max(1_000_000_000),
+
   mileage: z.coerce
     .number()
     .int()
     .positive("Enter the mileage in km.")
     .max(2_000_000),
+
   city: z.string().trim().min(2, "Enter the city.").max(60),
+
   about: z.string().trim().max(1000).default(""),
+
+  bodyType: z.string().trim().min(1, "Please select a body type."),
+
+  fuelType: z.string().trim().min(1, "Please select a fuel type."),
+
   evidence: z
     .string()
     .default("")

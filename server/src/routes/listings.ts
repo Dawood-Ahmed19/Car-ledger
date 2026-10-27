@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import { prisma } from "../prisma.js";
 import { requireAuth } from "../session.js";
 import { createListingSchema } from "../schemas.js";
+import { z } from "zod";
 
 export const listingsRouter = Router();
 
@@ -34,22 +35,28 @@ function priceLabel(n: number) {
 
 function toListing(l: {
   id: string;
+  sellerId: string;
   title: string;
   price: number;
   mileageKm: number;
   city: string;
   about: string;
+  bodyType: string | null;
+  fuelType: string | null;
   status: string;
   evidence: string[];
   photos: string[];
 }) {
   return {
     id: l.id,
+    sellerId: l.sellerId,
     title: l.title,
     priceLabel: priceLabel(l.price),
     mileageLabel: `${l.mileageKm.toLocaleString("en-PK")} km`,
     city: l.city,
     about: l.about,
+    bodyType: l.bodyType,
+    fuelType: l.fuelType,
     status: l.status,
     evidence: l.evidence,
     photos: l.photos,
@@ -139,8 +146,17 @@ listingsRouter.post(
       if (files.length === 0)
         return res.status(400).json({ error: "Add at least one photo." });
 
-      const { year, makeModel, price, mileage, city, about, evidence } =
-        parsed.data;
+      const {
+        year,
+        makeModel,
+        price,
+        mileage,
+        city,
+        about,
+        evidence,
+        bodyType,
+        fuelType,
+      } = parsed.data;
       const row = await prisma.listing.create({
         data: {
           title: `${year} ${makeModel}`,
@@ -148,6 +164,8 @@ listingsRouter.post(
           mileageKm: mileage,
           city,
           about,
+          bodyType,
+          fuelType,
           evidence,
           photos: files.map((f) => `/uploads/${f.filename}`),
           sellerId: req.user!.id,
@@ -161,3 +179,50 @@ listingsRouter.post(
     }
   },
 );
+
+listingsRouter.delete("/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate the listing ID
+    if (!z.string().uuid().safeParse(id).success) {
+      return res.status(400).json({
+        error: "Invalid listing ID",
+      });
+    }
+
+    // Find the listing
+    const listing = await prisma.listing.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        sellerId: true,
+      },
+    });
+
+    if (!listing) {
+      return res.status(404).json({
+        error: "Listing not found",
+      });
+    }
+
+    // Only the listing owner can delete it
+    if (listing.sellerId !== req.user.id) {
+      return res.status(403).json({
+        error: "You are not allowed to delete this listing",
+      });
+    }
+
+    await prisma.listing.delete({
+      where: { id },
+    });
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error("Delete listing error:", error);
+
+    return res.status(500).json({
+      error: "Failed to delete listing",
+    });
+  }
+});
