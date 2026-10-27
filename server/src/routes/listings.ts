@@ -182,15 +182,14 @@ listingsRouter.post(
 
 listingsRouter.delete("/:id", requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id;
 
     // Validate the listing ID
-    if (!z.string().uuid().safeParse(id).success) {
+    if (typeof id !== "string" || !z.string().uuid().safeParse(id).success) {
       return res.status(400).json({
         error: "Invalid listing ID",
       });
     }
-
     // Find the listing
     const listing = await prisma.listing.findUnique({
       where: { id },
@@ -203,6 +202,12 @@ listingsRouter.delete("/:id", requireAuth, async (req, res) => {
     if (!listing) {
       return res.status(404).json({
         error: "Listing not found",
+      });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({
+        error: "Authentication required",
       });
     }
 
