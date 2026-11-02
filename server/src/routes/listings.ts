@@ -3,7 +3,7 @@ import multer from "multer";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import { prisma } from "../prisma.js";
-import { requireAuth } from "../session.js";
+import { requireAuth, requireRole } from "../session.js";
 import { createListingSchema } from "../schemas.js";
 import { z } from "zod";
 
@@ -33,9 +33,8 @@ function priceLabel(n: number) {
   return `PKR ${n.toLocaleString("en-PK")}`;
 }
 
-function toListing(l: {
+export function toListing(l: {
   id: string;
-  sellerId: string;
   title: string;
   price: number;
   mileageKm: number;
@@ -46,11 +45,13 @@ function toListing(l: {
   status: string;
   evidence: string[];
   photos: string[];
+  sellerId: string;
 }) {
   return {
     id: l.id,
-    sellerId: l.sellerId,
     title: l.title,
+    price: l.price,
+    mileageKm: l.mileageKm,
     priceLabel: priceLabel(l.price),
     mileageLabel: `${l.mileageKm.toLocaleString("en-PK")} km`,
     city: l.city,
@@ -61,19 +62,27 @@ function toListing(l: {
     evidence: l.evidence,
     photos: l.photos,
     imageUrl: l.photos[0],
+    sellerId: l.sellerId,
     sellerTier: null,
   };
 }
 
-// All listings
-listingsRouter.get("/", requireAuth, async (_req, res) => {
+listingsRouter.get("/", requireAuth, async (req, res) => {
   try {
     const rows = await prisma.listing.findMany({
       where: { status: { not: "removed" } },
       orderBy: { createdAt: "desc" },
       take: 100,
+      include: {
+        saved: { where: { userId: req.user!.id }, select: { id: true } },
+      },
     });
-    res.json({ listings: rows.map(toListing) });
+    res.json({
+      listings: rows.map((r) => ({
+        ...toListing(r),
+        isSaved: r.saved.length > 0,
+      })),
+    });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Could not load listings. Try again." });
@@ -94,16 +103,46 @@ listingsRouter.get("/mine", requireAuth, async (req, res) => {
   }
 });
 
+// The signed-in user's saved listings, with a "changed" flag.
+listingsRouter.get("/saved", requireAuth, async (req, res) => {
+  try {
+    const rows = await prisma.savedListing.findMany({
+      where: { userId: req.user!.id, listing: { status: { not: "removed" } } },
+      include: { listing: true },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    res.json({
+      listings: rows.map((r) => ({
+        ...toListing(r.listing),
+        isSaved: true,
+        changed:
+          r.listing.status !== r.seenStatus || r.listing.price !== r.seenPrice,
+      })),
+    });
+  } catch (e) {
+    console.error(e);
+    res
+      .status(500)
+      .json({ error: "Could not load saved listings. Try again." });
+  }
+});
+
 // One listing
 listingsRouter.get("/:id", requireAuth, async (req, res) => {
   const id = String(req.params.id);
   if (!UUID.test(id))
     return res.status(404).json({ error: "Listing not found." });
   try {
-    const row = await prisma.listing.findUnique({ where: { id } });
+    const row = await prisma.listing.findUnique({
+      where: { id },
+      include: {
+        saved: { where: { userId: req.user!.id }, select: { id: true } },
+      },
+    });
     if (!row || row.status === "removed")
       return res.status(404).json({ error: "Listing not found." });
-    res.json({ listing: toListing(row) });
+    res.json({ listing: { ...toListing(row), isSaved: row.saved.length > 0 } });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Could not load the listing. Try again." });
@@ -114,6 +153,7 @@ listingsRouter.get("/:id", requireAuth, async (req, res) => {
 listingsRouter.post(
   "/",
   requireAuth,
+  requireRole("seller", "admin"), // buyers are rejected before any file is written
   (req, res, next) => {
     upload(req, res, (err) => {
       if (err) {
@@ -132,19 +172,14 @@ listingsRouter.post(
     const cleanup = () =>
       Promise.all(files.map((f) => fs.rm(f.path, { force: true })));
     try {
-      if (req.user!.role === "buyer") {
-        await cleanup();
-        return res
-          .status(403)
-          .json({ error: "Only seller accounts can post listings." });
-      }
       const parsed = createListingSchema.safeParse(req.body);
       if (!parsed.success) {
         await cleanup();
         return res.status(400).json({ error: parsed.error.issues[0].message });
       }
-      if (files.length === 0)
+      if (files.length === 0) {
         return res.status(400).json({ error: "Add at least one photo." });
+      }
 
       const {
         year,
@@ -157,6 +192,7 @@ listingsRouter.post(
         bodyType,
         fuelType,
       } = parsed.data;
+
       const row = await prisma.listing.create({
         data: {
           title: `${year} ${makeModel}`,

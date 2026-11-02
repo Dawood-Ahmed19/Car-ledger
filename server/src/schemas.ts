@@ -23,6 +23,29 @@ export const EVIDENCE_KEYS = [
   "owner_cnic",
 ] as const;
 
+export const BODY_TYPES = [
+  "sedan",
+  "hatchback",
+  "suv",
+  "crossover",
+  "pickup",
+  "van",
+  "coupe",
+] as const;
+export const FUEL_TYPES = [
+  "petrol",
+  "diesel",
+  "hybrid",
+  "electric",
+  "cng",
+] as const;
+
+const oneOf = (list: readonly string[], message: string) =>
+  z
+    .string()
+    .trim()
+    .refine((v) => list.includes(v), message);
+
 export const createListingSchema = z.object({
   year: z.coerce
     .number()
@@ -48,9 +71,8 @@ export const createListingSchema = z.object({
 
   about: z.string().trim().max(1000).default(""),
 
-  bodyType: z.string().trim().min(1, "Please select a body type."),
-
-  fuelType: z.string().trim().min(1, "Please select a fuel type."),
+  bodyType: oneOf(BODY_TYPES, "Please select a body type."),
+  fuelType: oneOf(FUEL_TYPES, "Please select a fuel type."),
 
   evidence: z
     .string()

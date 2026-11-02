@@ -25,6 +25,23 @@ enum ListingStatus {
   @@map("listing_status")
 }
 
+enum EvidenceType {
+  registration
+  inspection
+  service
+  owner_cnic
+
+  @@map("evidence_type")
+}
+
+enum EvidenceState {
+  pending
+  approved
+  rejected
+
+  @@map("evidence_state")
+}
+
 model User {
   id                  String         @id @default(uuid()) @db.Uuid
   email               String         @unique
@@ -36,7 +53,8 @@ model User {
   createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   sessions            Session[]
   listings            Listing[]
-  pushTokens PushToken[]
+  saved               SavedListing[]
+  pushTokens          PushToken[]
   buyerConversations  Conversation[] @relation("BuyerConversations")
   sellerConversations Conversation[] @relation("SellerConversations")
   messages            Message[]
@@ -67,6 +85,8 @@ model Listing {
   fuelType      String?        @map("fuel_type")
   status        ListingStatus  @default(not_checked)
   evidence      String[]
+  evidenceDocs  EvidenceDocument[]
+  saved         SavedListing[]
   photos        String[]
   conversations Conversation[]
   sellerId      String         @map("seller_id") @db.Uuid
@@ -112,6 +132,40 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@map("messages")
+}
+
+model EvidenceDocument {
+  id           String        @id @default(uuid()) @db.Uuid
+  listingId    String        @map("listing_id") @db.Uuid
+  type         EvidenceType
+  fileName     String        @map("file_name")
+  originalName String        @map("original_name")
+  mimeType     String        @map("mime_type")
+  state        EvidenceState @default(pending)
+  reviewNote   String?       @map("review_note")
+  reviewedAt   DateTime?     @map("reviewed_at") @db.Timestamptz(6)
+  reviewedById String?       @map("reviewed_by_id") @db.Uuid
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  listing      Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, type])
+  @@index([listingId])
+  @@map("evidence_documents")
+}
+
+model SavedListing {
+  id         String        @id @default(uuid()) @db.Uuid
+  userId     String        @map("user_id") @db.Uuid
+  listingId  String        @map("listing_id") @db.Uuid
+  seenStatus ListingStatus @map("seen_status")
+  seenPrice  Int           @map("seen_price")
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing    Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+  @@index([userId])
+  @@map("saved_listings")
 }
 
 model PushToken {

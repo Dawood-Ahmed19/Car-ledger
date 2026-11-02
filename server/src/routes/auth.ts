@@ -19,7 +19,7 @@ authRouter.use(
 
 const WRONG = "The email or password is wrong. Check both and try again.";
 const EXISTS = "An account with this email already exists. Log in instead.";
-const DUMMY_HASH = hash("not-a-real-password"); // so unknown emails take as long as wrong passwords
+const DUMMY_HASH = hash("not-a-real-password");
 
 authRouter.post("/signup", async (req, res) => {
   const parsed = signupSchema.safeParse(req.body);
