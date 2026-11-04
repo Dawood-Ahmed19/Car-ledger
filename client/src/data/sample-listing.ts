@@ -1,0 +1,58 @@
+import type { Listing } from "../types";
+
+export const SAMPLE_LISTINGS: Listing[] = [
+  {
+    id: "1",
+    title: "2018 Toyota Corolla GLi",
+    priceLabel: "PKR 4.85M",
+    mileageLabel: "62,000 km",
+    city: "Lahore",
+    status: "under_review",
+    sellerTier: "silver",
+  },
+  {
+    id: "2",
+    title: "2020 Honda Civic Oriel",
+    priceLabel: "PKR 7.90M",
+    mileageLabel: "41,500 km",
+    city: "Islamabad",
+    status: "verified",
+    sellerTier: "gold",
+  },
+  {
+    id: "3",
+    title: "2016 Suzuki Swift DLX",
+    priceLabel: "PKR 3.10M",
+    mileageLabel: "88,200 km",
+    city: "Karachi",
+    status: "not_checked",
+    sellerTier: "bronze",
+  },
+  {
+    id: "4",
+    title: "2019 Honda City Aspire",
+    priceLabel: "PKR 5.40M",
+    mileageLabel: "57,300 km",
+    city: "Rawalpindi",
+    status: "verified",
+    sellerTier: "platinum",
+  },
+  {
+    id: "5",
+    title: "2017 Toyota Yaris GLI",
+    priceLabel: "PKR 3.95M",
+    mileageLabel: "71,900 km",
+    city: "Faisalabad",
+    status: "recalled",
+    sellerTier: "bronze",
+  },
+  {
+    id: "6",
+    title: "2021 Kia Sportage Alpha",
+    priceLabel: "PKR 9.20M",
+    mileageLabel: "29,800 km",
+    city: "Lahore",
+    status: "verified",
+    sellerTier: "gold",
+  },
+];
