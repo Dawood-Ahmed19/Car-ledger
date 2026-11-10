@@ -13,6 +13,7 @@ import { initRealtime } from "./realtime.js";
 import { pushRouter } from "./routes/push.js";
 import { evidenceRouter } from "./routes/evidence.js";
 import { savedRouter } from "./routes/saved.js";
+import { passwordRouter } from "./routes/passwords.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -27,6 +28,7 @@ app.use("/api/push-token", requireAuth, pushRouter);
 app.use("/api/listings", listingsRouter);
 app.use("/api", evidenceRouter);
 app.use("/api/saved", savedRouter);
+app.use("/api/me/password", requireAuth, passwordRouter);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found." }));
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

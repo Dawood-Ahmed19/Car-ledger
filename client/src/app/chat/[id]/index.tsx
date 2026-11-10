@@ -1,3 +1,14 @@
+import { ScamBanner } from "@/components/chat/scam-banner";
+import { AppHeader } from "@/components/layout/app-header";
+import {
+  EvidenceChip,
+  formatPrice,
+  type ListingSummary,
+} from "@/components/messages/conversation-card";
+import { setActiveConversation, useRealtime } from "@/context/realtime";
+import { api, assetUrl } from "@/lib/api";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,19 +21,17 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { AppHeader } from "@/components/layout/app-header";
-import { api, assetUrl } from "@/lib/api";
-import { setActiveConversation, useRealtime } from "@/context/realtime";
-import {
-  EvidenceChip,
-  formatPrice,
-  type ListingSummary,
-} from "@/components/messages/conversation-card";
 
-type Msg = { id: string; body: string; createdAt: string; mine: boolean };
+type Msg = {
+  id: string;
+  body: string;
+  createdAt: string;
+  mine: boolean;
+  scamRisk?: "low" | "high";
+  scamWarning?: string;
+};
+
 type Meta = {
   id: string;
   listing: ListingSummary;
@@ -33,7 +42,6 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { subscribe } = useRealtime();
 
   const [meta, setMeta] = useState<Meta | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -42,6 +50,28 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<FlatList<Msg>>(null);
+  const { subscribe } = useRealtime();
+
+  useEffect(() => {
+    return subscribe(
+      "message:warning",
+      (w: {
+        conversationId: string;
+        messageId: string;
+        risk: "low" | "high";
+        warning: string;
+      }) => {
+        if (w.conversationId !== id) return;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === w.messageId
+              ? { ...m, scamRisk: w.risk, scamWarning: w.warning }
+              : m,
+          ),
+        );
+      },
+    );
+  }, [id, subscribe]);
 
   const goBack = () =>
     router.canGoBack() ? router.back() : router.replace("/messages" as any);
@@ -229,6 +259,9 @@ export default function ChatScreen() {
                 minute: "2-digit",
               })}
             </Text>
+            {!item.mine && item.scamRisk && item.scamWarning && (
+              <ScamBanner risk={item.scamRisk} warning={item.scamWarning} />
+            )}
           </View>
         )}
       />

@@ -148,7 +148,7 @@ export default function ProfileScreen() {
           <Row
             icon="document-text-outline"
             label="My evidence reports"
-            onPress={() => {}}
+            onPress={() => router.push("/evidence")}
           />
           {user.role !== "buyer" && (
             <>

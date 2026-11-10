@@ -7,6 +7,7 @@ import {
 import { prisma } from "../prisma.js";
 import { emitToUser, isOnline } from "../realtime.js";
 import { sendPush } from "../push.js";
+import { checkMessage } from "../scamCheck.js";
 
 export const conversationsRouter = Router();
 
@@ -79,6 +80,59 @@ async function markRead(conversationId: string, userId: string) {
   });
   if (count > 0)
     emitToUser(userId, "unread:update", { count: await unreadCount(userId) });
+}
+
+type Conv = NonNullable<Awaited<ReturnType<typeof getMine>>>;
+
+// Runs after the response is sent. Never throws, so it can't break chat.
+async function runScamCheck(
+  conv: Conv,
+  messageId: string,
+  recipientId: string,
+) {
+  try {
+    const recent = await prisma.message.findMany({
+      where: { conversationId: conv.id },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    });
+
+    const history = recent.reverse().map((m) => ({
+      role: (m.senderId === conv.buyerId ? "buyer" : "seller") as
+        | "buyer"
+        | "seller",
+      text: m.body.slice(0, 500),
+    }));
+
+    const result = await checkMessage({
+      history,
+      listing: {
+        title: conv.listing.title,
+        price: `PKR ${conv.listing.price}`,
+      },
+      senderId: conv.buyerId === recipientId ? conv.sellerId : conv.buyerId,
+    });
+    if (result.risk === "none") return;
+
+    await prisma.message.update({
+      where: { id: messageId },
+      data: {
+        scamRisk: result.risk,
+        scamWarning: result.warning,
+        scamCheckedAt: new Date(),
+      },
+    });
+
+    // only the recipient is warned, never the sender
+    emitToUser(recipientId, "message:warning", {
+      conversationId: conv.id,
+      messageId,
+      risk: result.risk,
+      warning: result.warning,
+    });
+  } catch (e) {
+    console.error("scam check failed", e);
+  }
 }
 
 // Total unread (for the tab badge)
@@ -192,12 +246,18 @@ conversationsRouter.get(
           conv.buyerId === userId ? conv.seller : conv.buyer,
         ),
       },
-      messages: messages.map((m) => ({
-        id: m.id,
-        body: m.body,
-        createdAt: m.createdAt,
-        mine: m.senderId === userId,
-      })),
+      messages: messages.map((m) => {
+        const mine = m.senderId === userId;
+        return {
+          id: m.id,
+          body: m.body,
+          createdAt: m.createdAt,
+          mine,
+          ...(!mine && m.scamRisk
+            ? { scamRisk: m.scamRisk, scamWarning: m.scamWarning }
+            : {}),
+        };
+      }),
     });
   }),
 );
@@ -273,9 +333,10 @@ conversationsRouter.post(
     }
 
     res.status(201).json({ ...base, mine: true });
+
+    void runScamCheck(conv, m.id, recipientId);
   }),
 );
-
 // Archive / unarchive for me only (POST because your api() helper only supports GET/POST)
 conversationsRouter.post(
   "/:id/archive",

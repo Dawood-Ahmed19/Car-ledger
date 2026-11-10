@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useState, type ReactNode } from "react";
 import {
   Image,
@@ -10,7 +11,6 @@ import {
   type ImageSourcePropType,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 type IconName = keyof typeof Ionicons.glyphMap;
 
 const MONO = Platform.select({ ios: "Menlo", default: "monospace" });
@@ -178,6 +178,8 @@ function BrandHeader({
     fn?.();
   };
 
+  const router = useRouter();
+
   return (
     <Shell tall>
       <View className="flex-1 flex-row items-center gap-2.5">
@@ -260,7 +262,7 @@ function BrandHeader({
             <MenuItem
               icon="settings-outline"
               label="Settings"
-              onPress={() => run(onPressSettings)}
+              onPress={() => router.push("/settings" as any)}
             />
             <View className="mx-2 my-1 h-px bg-tint-200" />
             <MenuItem

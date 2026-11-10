@@ -38,6 +38,12 @@ export async function revokeToken(token: string) {
   await prisma.session.deleteMany({ where: { tokenHash: hashToken(token) } });
 }
 
+export async function revokeOtherTokens(userId: string, currentToken: string) {
+  await prisma.session.deleteMany({
+    where: { userId, tokenHash: { not: hashToken(currentToken) } },
+  });
+}
+
 export async function requireAuth(
   req: Request,
   res: Response,
@@ -63,7 +69,6 @@ export async function requireAuth(
   next();
 }
 
-// Use on routes only some roles may call: app.get("/x", requireAuth, requireRole("admin"), handler)
 export const requireRole =
   (...roles: SessionUser["role"][]) =>
   (req: Request, res: Response, next: NextFunction) =>

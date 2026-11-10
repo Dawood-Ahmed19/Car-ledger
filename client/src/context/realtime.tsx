@@ -1,3 +1,8 @@
+import { api, BASE, getAuthToken, onAuthTokenChange } from "@/lib/api";
+import Constants from "expo-constants";
+import * as Device from "expo-device";
+import type * as NotificationsType from "expo-notifications";
+import { useRouter } from "expo-router";
 import {
   createContext,
   useCallback,
@@ -8,13 +13,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { AppState, Platform } from "react-native";
+import { Alert, AppState, Platform } from "react-native";
 import { io, type Socket } from "socket.io-client";
-import type * as NotificationsType from "expo-notifications";
-import * as Device from "expo-device";
-import Constants from "expo-constants";
-import { useRouter } from "expo-router";
-import { api, BASE, getAuthToken, onAuthTokenChange } from "@/lib/api";
 
 // Expo Go (or a build without the native module) throws when expo-notifications
 // is imported. Load it safely so the rest of the app keeps working.
@@ -131,6 +131,28 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       setUnread(count);
     } catch {}
   }, []);
+
+  // high-risk warning while the user is NOT looking at that chat
+  useEffect(() => {
+    return subscribe(
+      "message:warning",
+      (w: {
+        conversationId: string;
+        risk: "low" | "high";
+        warning: string;
+      }) => {
+        if (w.risk !== "high" || w.conversationId === activeConversation)
+          return;
+        Alert.alert("Safety warning", w.warning, [
+          { text: "Dismiss", style: "cancel" },
+          {
+            text: "Open chat",
+            onPress: () => router.push(`/chat/${w.conversationId}` as any),
+          },
+        ]);
+      },
+    );
+  }, [subscribe, router]);
 
   useEffect(() => {
     const disconnect = () => {
