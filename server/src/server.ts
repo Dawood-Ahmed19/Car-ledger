@@ -14,6 +14,8 @@ import { pushRouter } from "./routes/push.js";
 import { evidenceRouter } from "./routes/evidence.js";
 import { savedRouter } from "./routes/saved.js";
 import { passwordRouter } from "./routes/passwords.js";
+import { notificationsRouter } from "./routes/notifications.js";
+import { settingsRouter } from "./routes/settings.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -29,6 +31,8 @@ app.use("/api/listings", listingsRouter);
 app.use("/api", evidenceRouter);
 app.use("/api/saved", savedRouter);
 app.use("/api/me/password", requireAuth, passwordRouter);
+app.use("/api/notifications", requireAuth, notificationsRouter);
+app.use("/api/me/settings", requireAuth, settingsRouter);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found." }));
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

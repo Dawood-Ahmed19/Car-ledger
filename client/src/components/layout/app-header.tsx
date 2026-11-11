@@ -1,3 +1,4 @@
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState, type ReactNode } from "react";
@@ -209,19 +210,7 @@ function BrandHeader({
           </View>
         )}
 
-        <Pressable
-          onPress={onPressNotifications}
-          accessibilityRole="button"
-          accessibilityLabel={
-            hasUnread ? "Notifications, unread" : "Notifications"
-          }
-          className="h-10 w-10 items-center justify-center"
-        >
-          <Ionicons name="notifications-outline" size={22} color="#434655" />
-          {hasUnread && (
-            <View className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-white bg-danger" />
-          )}
-        </Pressable>
+        <NotificationBell />
 
         <Pressable
           onPress={() => setOpen(true)}
@@ -262,7 +251,7 @@ function BrandHeader({
             <MenuItem
               icon="settings-outline"
               label="Settings"
-              onPress={() => router.push("/settings" as any)}
+              onPress={() => run(() => router.push("/settings" as any))}
             />
             <View className="mx-2 my-1 h-px bg-tint-200" />
             <MenuItem

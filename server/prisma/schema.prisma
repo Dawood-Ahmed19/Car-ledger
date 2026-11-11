@@ -15,13 +15,6 @@ enum Role {
   @@map("user_role")
 }
 
-  enum ScamRisk {
-    low
-    high
-
-    @@map("scam_risk")
-  }
-
 enum ListingStatus {
   verified
   under_review
@@ -62,6 +55,10 @@ model User {
   listings            Listing[]
   saved               SavedListing[]
   pushTokens          PushToken[]
+  notifications       Notification[]
+  notifyMessages      Boolean        @default(true) @map("notify_messages")
+  notifyScam          Boolean        @default(true) @map("notify_scam")
+  notifyEvidence      Boolean        @default(true) @map("notify_evidence")
   buyerConversations  Conversation[] @relation("BuyerConversations")
   sellerConversations Conversation[] @relation("SellerConversations")
   messages            Message[]
@@ -186,4 +183,19 @@ model PushToken {
 
   @@index([userId])
   @@map("push_tokens")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
 }

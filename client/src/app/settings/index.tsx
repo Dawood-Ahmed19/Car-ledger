@@ -1,14 +1,29 @@
 import { useAuth } from "@/context/auth";
+import { unregisterPush } from "@/context/realtime";
+import { api } from "@/lib/api";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Alert, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
+type Prefs = {
+  hideFullName: boolean;
+  notifyMessages: boolean;
+  notifyScam: boolean;
+  notifyEvidence: boolean;
+};
+
+const DEFAULTS: Prefs = {
+  hideFullName: false,
+  notifyMessages: true,
+  notifyScam: true,
+  notifyEvidence: true,
+};
+
 const BLUE = "#2563eb";
-const GREY = "#434655";
 
 function Section({
   title,
@@ -98,6 +113,7 @@ function ToggleRow(props: {
           onValueChange={props.onChange}
           trackColor={{ true: BLUE, false: "#d3e4fe" }}
           thumbColor="#fff"
+          accessibilityLabel={props.title}
         />
       }
     />
@@ -107,22 +123,47 @@ function ToggleRow(props: {
 export default function Settings() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, signOut } = useAuth(); // adjust "logout" if your context names it differently
+  const { user, signOut } = useAuth();
 
-  // local only for now; we'll save these to the server in Step 3
-  const [pushMessages, setPushMessages] = useState(true);
-  const [scamAlerts, setScamAlerts] = useState(true);
-  const [evidenceUpdates, setEvidenceUpdates] = useState(true);
-  const [maskName, setMaskName] = useState(false);
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULTS);
+
+  // load the saved preferences
+  useEffect(() => {
+    api<Prefs>("/api/me/settings")
+      .then(setPrefs)
+      .catch(() => {});
+  }, []);
+
+  // flip instantly, save in the background, undo if saving fails
+  const update = async (key: keyof Prefs, value: boolean) => {
+    setPrefs((p) => ({ ...p, [key]: value }));
+    try {
+      await api("/api/me/settings", {
+        method: "POST",
+        body: { [key]: value },
+      });
+    } catch {
+      setPrefs((p) => ({ ...p, [key]: !value }));
+      Alert.alert("Couldn't save", "Check your connection and try again.");
+    }
+  };
 
   const confirmLogout = () =>
     Alert.alert("Log out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Log out", style: "destructive", onPress: () => void signOut() },
+      {
+        text: "Log out",
+        style: "destructive",
+        onPress: async () => {
+          await unregisterPush(); // stop pushes for this account on this phone
+          await signOut();
+        },
+      },
     ]);
 
   const initials = (user?.fullName ?? "?")
     .split(" ")
+    .filter(Boolean)
     .map((s: string) => s[0])
     .slice(0, 2)
     .join("")
@@ -137,6 +178,7 @@ export default function Settings() {
       >
         <Pressable
           onPress={() => router.back()}
+          accessibilityLabel="Go back"
           className="h-11 w-11 items-center justify-center rounded-lg active:bg-blue-50"
         >
           <Ionicons name="arrow-back" size={24} color="#0b1c30" />
@@ -194,23 +236,23 @@ export default function Settings() {
           <ToggleRow
             icon="chatbubble-ellipses-outline"
             title="New messages"
-            subtitle="Push alerts for chats"
-            value={pushMessages}
-            onChange={setPushMessages}
+            subtitle="Push alerts when the app is closed"
+            value={prefs.notifyMessages}
+            onChange={(v) => update("notifyMessages", v)}
           />
           <ToggleRow
             icon="warning-outline"
             title="Scam warnings"
-            subtitle="Alert me about suspicious messages"
-            value={scamAlerts}
-            onChange={setScamAlerts}
+            subtitle="Pop-up and bell alerts about suspicious messages"
+            value={prefs.notifyScam}
+            onChange={(v) => update("notifyScam", v)}
           />
           <ToggleRow
             icon="shield-checkmark-outline"
             title="Evidence updates"
-            subtitle="When a listing is verified or flagged"
-            value={evidenceUpdates}
-            onChange={setEvidenceUpdates}
+            subtitle="When a document or listing is reviewed"
+            value={prefs.notifyEvidence}
+            onChange={(v) => update("notifyEvidence", v)}
             last
           />
         </Section>
@@ -219,9 +261,9 @@ export default function Settings() {
           <ToggleRow
             icon="eye-off-outline"
             title="Hide my full name"
-            subtitle="Show first name + initial on listings"
-            value={maskName}
-            onChange={setMaskName}
+            subtitle="Others see your first name and last initial"
+            value={prefs.hideFullName}
+            onChange={(v) => update("hideFullName", v)}
             last
           />
         </Section>

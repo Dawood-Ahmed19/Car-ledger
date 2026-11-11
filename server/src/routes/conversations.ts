@@ -8,6 +8,9 @@ import { prisma } from "../prisma.js";
 import { emitToUser, isOnline } from "../realtime.js";
 import { sendPush } from "../push.js";
 import { checkMessage } from "../scamCheck.js";
+import { notify } from "../notify.js";
+import { getPrefs } from "../prefs.js";
+import { displayName } from "../displayName.js";
 
 export const conversationsRouter = Router();
 
@@ -39,10 +42,14 @@ function serializeListing(l: {
   };
 }
 
-const userSelect = { id: true, fullName: true } as const;
-const publicUser = (u: { id: string; fullName: string }) => ({
+const userSelect = { id: true, fullName: true, hideFullName: true } as const;
+const publicUser = (u: {
+  id: string;
+  fullName: string;
+  hideFullName: boolean;
+}) => ({
   id: u.id,
-  name: u.fullName,
+  name: displayName(u),
 });
 
 const convInclude = {
@@ -123,13 +130,29 @@ async function runScamCheck(
       },
     });
 
+    const prefs = await getPrefs(recipientId);
+
     // only the recipient is warned, never the sender
     emitToUser(recipientId, "message:warning", {
       conversationId: conv.id,
       messageId,
       risk: result.risk,
       warning: result.warning,
+      alert: prefs.notifyScam, // false = no pop-up; the banner under the message still shows
     });
+
+    // high-risk warnings also go into the notification center (the bell).
+    // notify() checks the "Scam warnings" switch itself.
+    if (result.risk === "high") {
+      await notify(recipientId, {
+        type: "scam",
+        title: "Possible scam message",
+        body:
+          result.warning ?? "A message in one of your chats looks suspicious.",
+        data: { conversationId: conv.id },
+        push: false,
+      });
+    }
   } catch (e) {
     console.error("scam check failed", e);
   }
@@ -322,10 +345,11 @@ conversationsRouter.post(
     const unread = await unreadCount(recipientId);
     emitToUser(recipientId, "unread:update", { count: unread });
 
-    // push only if they have no live socket (app closed or in the background)
-    if (!(await isOnline(recipientId))) {
+    // push only if they want it AND have no live socket (app closed or in the background)
+    const prefs = await getPrefs(recipientId);
+    if (prefs.notifyMessages && !(await isOnline(recipientId))) {
       void sendPush(recipientId, {
-        title: req.user!.fullName,
+        title: displayName(conv.buyerId === userId ? conv.buyer : conv.seller),
         body: body.length > 120 ? `${body.slice(0, 117)}…` : body,
         data: { conversationId: conv.id },
         badge: unread,
@@ -334,9 +358,11 @@ conversationsRouter.post(
 
     res.status(201).json({ ...base, mine: true });
 
+    // fire and forget: runs after the sender already has their response
     void runScamCheck(conv, m.id, recipientId);
   }),
 );
+
 // Archive / unarchive for me only (POST because your api() helper only supports GET/POST)
 conversationsRouter.post(
   "/:id/archive",

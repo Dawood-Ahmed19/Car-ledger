@@ -7,6 +7,7 @@ import path from "node:path";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { requireAuth, requireRole, type SessionUser } from "../session.js";
+import { notify } from "../notify.js";
 
 export const evidenceRouter = Router();
 
@@ -16,6 +17,13 @@ mkdirSync(DIR, { recursive: true });
 const TYPES = ["registration", "inspection", "service", "owner_cnic"] as const;
 type EvType = (typeof TYPES)[number];
 const UUID = z.string().uuid();
+
+const LABEL: Record<string, string> = {
+  registration: "Registration papers",
+  inspection: "Inspection report",
+  service: "Service history",
+  owner_cnic: "Owner CNIC",
+};
 
 const EXT: Record<string, string> = {
   "image/jpeg": ".jpg",
@@ -65,6 +73,7 @@ async function access(listingId: string, user: SessionUser) {
 }
 
 // Keeps listing.evidence and listing.status in step with its documents.
+// Returns the status before and after, so callers can notify on changes.
 async function syncListing(listingId: string) {
   const [docs, listing] = await Promise.all([
     prisma.evidenceDocument.findMany({
@@ -76,7 +85,7 @@ async function syncListing(listingId: string) {
       select: { status: true },
     }),
   ]);
-  if (!listing) return;
+  if (!listing) return null;
 
   const approved = docs.filter((d) => d.state === "approved").length;
   const status = docs.some((d) => d.state === "pending")
@@ -90,6 +99,7 @@ async function syncListing(listingId: string) {
     where: { id: listingId },
     data: { evidence: docs.map((d) => d.type), ...(locked ? {} : { status }) },
   });
+  return { before: listing.status, after: locked ? listing.status : status };
 }
 
 // Seller: upload or replace one document
@@ -166,6 +176,24 @@ evidenceRouter.post(
       });
       if (old) await fs.rm(path.join(DIR, old.fileName), { force: true });
       await syncListing(id);
+
+      // let admins know there's something to review
+      const [admins, listing] = await Promise.all([
+        prisma.user.findMany({
+          where: { role: "admin", id: { not: req.user!.id } },
+          select: { id: true },
+        }),
+        prisma.listing.findUnique({ where: { id }, select: { title: true } }),
+      ]);
+      for (const a of admins) {
+        void notify(a.id, {
+          type: "evidence",
+          title: "Document waiting for review",
+          body: `A new document was uploaded for "${listing?.title ?? "a listing"}".`,
+          data: { listingId: id },
+        });
+      }
+
       res.status(201).json({ document: toDoc(doc) });
     } catch (e) {
       await drop();
@@ -298,8 +326,47 @@ evidenceRouter.patch(
           reviewedAt: new Date(),
           reviewedById: req.user!.id,
         },
+        include: { listing: { select: { title: true, sellerId: true } } },
       });
-      await syncListing(doc.listingId);
+      const change = await syncListing(doc.listingId);
+
+      // tell the seller (skip if an admin is reviewing their own listing)
+      const sellerId = doc.listing.sellerId;
+      if (sellerId !== req.user!.id) {
+        const label = LABEL[doc.type] ?? "A document";
+        const title = doc.listing.title;
+        const data = { listingId: doc.listingId };
+
+        if (parsed.data.state === "approved") {
+          await notify(sellerId, {
+            type: "evidence",
+            title: "Document approved",
+            body: `${label} for "${title}" was approved.`,
+            data,
+          });
+        } else {
+          await notify(sellerId, {
+            type: "evidence",
+            title: "Document rejected",
+            body: `${label} for "${title}" was rejected: ${parsed.data.note}. Upload a corrected file.`,
+            data,
+          });
+        }
+
+        if (
+          change &&
+          change.before !== "verified" &&
+          change.after === "verified"
+        ) {
+          await notify(sellerId, {
+            type: "listing",
+            title: "Your listing is verified",
+            body: `"${title}" now has the Verified badge. Buyers will see it.`,
+            data,
+          });
+        }
+      }
+
       res.json({ document: toDoc(doc) });
     } catch (e) {
       if ((e as { code?: string }).code === "P2025") {
