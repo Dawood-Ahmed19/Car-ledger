@@ -2,9 +2,11 @@ import { Router } from "express";
 import multer from "multer";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import path from "node:path";
 import { prisma } from "../prisma.js";
 import { requireAuth, requireRole } from "../session.js";
 import { createListingSchema } from "../schemas.js";
+import { findRejectedPhotos } from "../photoCheck.js";
 import { z } from "zod";
 
 export const listingsRouter = Router();
@@ -27,6 +29,9 @@ const upload = multer({
   fileFilter: (_req, file, cb) => cb(null, file.mimetype in EXT),
 }).array("photos", 8);
 
+// "/uploads/abc.jpg" -> disk path "uploads/abc.jpg"
+const toDiskPath = (p: string) => path.resolve(p.replace(/^\/+/, ""));
+
 function priceLabel(n: number) {
   if (n >= 1_000_000)
     return `PKR ${(n / 1_000_000).toFixed(2).replace(/\.?0+$/, "")}M`;
@@ -46,6 +51,7 @@ export function toListing(l: {
   evidence: string[];
   photos: string[];
   sellerId: string;
+  photoCheck?: string;
 }) {
   return {
     id: l.id,
@@ -64,6 +70,7 @@ export function toListing(l: {
     imageUrl: l.photos[0],
     sellerId: l.sellerId,
     sellerTier: null,
+    photoCheck: l.photoCheck ?? "passed", // "pending" = photos not checked by the AI yet
   };
 }
 
@@ -181,6 +188,29 @@ listingsRouter.post(
         return res.status(400).json({ error: "Add at least one photo." });
       }
 
+      // AI check: every photo must be a real photo of a car or bike.
+      // If the AI can't be reached, the listing is still accepted but marked
+      // "pending". The background job (photoRecheck.ts) checks it later and
+      // removes the listing if a photo isn't a real vehicle photo.
+      let photoCheck: "passed" | "pending" = "passed";
+      try {
+        const rejected = await findRejectedPhotos(files);
+        if (rejected.length > 0) {
+          await cleanup();
+          return res.status(422).json({
+            error:
+              "Some photos don't look like a car or bike. Replace them and try again.",
+            rejected, // indexes of the bad photos, in upload order
+          });
+        }
+      } catch (e) {
+        console.error(
+          "Photo check unavailable, saving listing as pending:",
+          (e as Error).message,
+        );
+        photoCheck = "pending";
+      }
+
       const {
         year,
         makeModel,
@@ -205,6 +235,7 @@ listingsRouter.post(
           evidence,
           photos: files.map((f) => `/uploads/${f.filename}`),
           sellerId: req.user!.id,
+          photoCheck,
         },
       });
       res.status(201).json({ listing: toListing(row) });
@@ -232,6 +263,7 @@ listingsRouter.delete("/:id", requireAuth, async (req, res) => {
       select: {
         id: true,
         sellerId: true,
+        photos: true,
       },
     });
 
@@ -257,6 +289,13 @@ listingsRouter.delete("/:id", requireAuth, async (req, res) => {
     await prisma.listing.delete({
       where: { id },
     });
+
+    // remove the photo files too, so they don't pile up on disk
+    await Promise.all(
+      listing.photos
+        .filter((p) => !p.startsWith("http"))
+        .map((p) => fs.rm(toDiskPath(p), { force: true })),
+    );
 
     return res.status(204).send();
   } catch (error) {

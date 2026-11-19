@@ -16,6 +16,7 @@ import { savedRouter } from "./routes/saved.js";
 import { passwordRouter } from "./routes/passwords.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { settingsRouter } from "./routes/settings.js";
+import { startPhotoRecheck } from "./photoRecheck.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -48,3 +49,5 @@ initRealtime(httpServer);
 httpServer.listen(port, "0.0.0.0", () =>
   console.log(`API running on http://localhost:${port}`),
 );
+
+startPhotoRecheck();

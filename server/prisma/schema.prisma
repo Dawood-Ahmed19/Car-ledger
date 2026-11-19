@@ -15,6 +15,13 @@ enum Role {
   @@map("user_role")
 }
 
+enum PhotoCheck {
+  passed
+  pending
+
+  @@map("photo_check_state")
+}
+
 enum ListingStatus {
   verified
   under_review
@@ -57,6 +64,7 @@ model User {
   pushTokens          PushToken[]
   notifications       Notification[]
   notifyMessages      Boolean        @default(true) @map("notify_messages")
+  hideFullName        Boolean        @default(false) @map("hide_full_name")
   notifyScam          Boolean        @default(true) @map("notify_scam")
   notifyEvidence      Boolean        @default(true) @map("notify_evidence")
   buyerConversations  Conversation[] @relation("BuyerConversations")
@@ -92,6 +100,7 @@ model Listing {
   evidenceDocs  EvidenceDocument[]
   saved         SavedListing[]
   photos        String[]
+  photoCheck    String   @default("passed") @map("photo_check")
   conversations Conversation[]
   sellerId      String         @map("seller_id") @db.Uuid
   seller        User           @relation(fields: [sellerId], references: [id], onDelete: Cascade)

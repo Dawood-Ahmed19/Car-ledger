@@ -1,4 +1,5 @@
 import { LoadingScreen } from "@/components/layout/LoadingScreen";
+import { NetworkBanner } from "@/components/layout/NetworkBanner";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
@@ -40,6 +41,7 @@ function RootNavigator() {
   return (
     <View className="flex-1 bg-white">
       <Stack screenOptions={{ headerShown: false }} />
+      <NetworkBanner />
       {target ? (
         <View style={StyleSheet.absoluteFill}>
           <LoadingScreen />

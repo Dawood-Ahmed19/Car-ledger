@@ -7,6 +7,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    public data?: { rejected?: number[] },
   ) {
     super(message);
   }
@@ -51,9 +52,9 @@ function upload<T>(path: string, form: FormData): Promise<T> {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${BASE}${path}`);
     if (authToken) xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
-    xhr.timeout = 60_000;
+    xhr.timeout = 180_000; // the server checks every photo with AI before replying
     xhr.onload = () => {
-      let data: { error?: string } = {};
+      let data: { error?: string; rejected?: number[] } = {};
       try {
         data = JSON.parse(xhr.responseText);
       } catch {}
@@ -63,11 +64,18 @@ function upload<T>(path: string, form: FormData): Promise<T> {
         new ApiError(
           data.error ?? "Something went wrong. Try again.",
           xhr.status,
+          data,
         ),
       );
     };
     xhr.onerror = () => reject(new ApiError(NETWORK_MSG, 0));
-    xhr.ontimeout = () => reject(new ApiError(NETWORK_MSG, 0));
+    xhr.ontimeout = () =>
+      reject(
+        new ApiError(
+          "Checking your photos is taking too long. Try again with fewer or smaller photos.",
+          408,
+        ),
+      );
     xhr.send(form);
   });
 }

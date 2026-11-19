@@ -1,3 +1,7 @@
+import { TextField } from "@/components/ui/TextField";
+import { useAuth } from "@/context/auth";
+import { ApiError } from "@/lib/api";
+import { Link } from "expo-router";
 import { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -7,10 +11,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { Link } from "expo-router";
-import { TextField } from "@/components/ui/TextField";
-import { useAuth } from "@/context/auth";
-import { ApiError } from "@/lib/api";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
