@@ -1,5 +1,5 @@
 import { Expo, type ExpoPushMessage } from "expo-server-sdk";
-import { prisma } from "./prisma.js";
+import * as pushTokenModel from "../models/pushToken.model.js";
 
 const expo = new Expo();
 
@@ -12,11 +12,11 @@ export async function sendPush(
     badge?: number;
   },
 ) {
-  const rows = await prisma.pushToken.findMany({ where: { userId } });
+  const rows = await pushTokenModel.listForUser(userId);
   const messages: ExpoPushMessage[] = rows
-    .filter((r) => Expo.isExpoPushToken(r.token))
-    .map((r) => ({
-      to: r.token,
+    .filter((row) => Expo.isExpoPushToken(row.token))
+    .map((row) => ({
+      to: row.token,
       sound: "default",
       channelId: "messages",
       ...msg,
@@ -27,13 +27,13 @@ export async function sendPush(
     try {
       const tickets = await expo.sendPushNotificationsAsync(chunk);
       // remove tokens Expo says no longer exist (app uninstalled etc.)
-      const dead = tickets.flatMap((t, i) =>
-        t.status === "error" && t.details?.error === "DeviceNotRegistered"
+      const dead = tickets.flatMap((ticket, i) =>
+        ticket.status === "error" &&
+        ticket.details?.error === "DeviceNotRegistered"
           ? [chunk[i].to as string]
           : [],
       );
-      if (dead.length)
-        await prisma.pushToken.deleteMany({ where: { token: { in: dead } } });
+      if (dead.length) await pushTokenModel.deleteTokens(dead);
     } catch (e) {
       console.error("push failed", e);
     }

@@ -16,8 +16,6 @@ import {
 import { Alert, AppState, Platform } from "react-native";
 import { io, type Socket } from "socket.io-client";
 
-// Expo Go (or a build without the native module) throws when expo-notifications
-// is imported. Load it safely so the rest of the app keeps working.
 const Notifications: typeof NotificationsType | null = (() => {
   try {
     return require("expo-notifications");

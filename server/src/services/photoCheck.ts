@@ -20,7 +20,7 @@ Reply with JSON only.`;
 async function checkOne(path: string): Promise<Verdict> {
   const image = (await fs.readFile(path)).toString("base64");
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 120_000); // first call loads the model
+  const timer = setTimeout(() => ctrl.abort(), 120_000);
   try {
     const res = await fetch(`${OLLAMA_URL}/api/chat`, {
       method: "POST",

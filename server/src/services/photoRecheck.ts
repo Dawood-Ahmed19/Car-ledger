@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { prisma } from "./prisma.js";
+import * as listingModel from "../models/listing.model.js";
 import { findRejectedPhotos } from "./photoCheck.js";
 import { notify } from "./notify.js";
 
@@ -36,24 +36,19 @@ async function recheck() {
   try {
     if (!(await ollamaIsUp())) return;
 
-    const pending = await prisma.listing.findMany({
-      where: { photoCheck: "pending" },
-      orderBy: { createdAt: "asc" },
-      take: BATCH,
-      select: { id: true, title: true, sellerId: true, photos: true },
-    });
+    const pending = await listingModel.findPendingPhotoChecks(BATCH);
 
-    for (const l of pending) {
-      const paths = l.photos
-        .filter((p) => !p.startsWith("http"))
+    for (const listing of pending) {
+      const paths = listing.photos
+        .filter((photo) => !photo.startsWith("http"))
         .map(toDiskPath);
 
       // keep only files that still exist on disk
       const files: { path: string }[] = [];
-      for (const p of paths) {
+      for (const filePath of paths) {
         try {
-          await fs.access(p);
-          files.push({ path: p });
+          await fs.access(filePath);
+          files.push({ path: filePath });
         } catch {}
       }
       if (files.length === 0) continue; // nothing to check, try again later
@@ -66,31 +61,25 @@ async function recheck() {
       }
 
       if (rejected.length === 0) {
-        await prisma.listing.update({
-          where: { id: l.id },
-          data: { photoCheck: "passed" },
-        });
+        await listingModel.setPhotoCheckPassed(listing.id);
         continue;
       }
 
       const first = rejected[0] + 1;
       if (ACTION === "delete") {
-        await prisma.listing.delete({ where: { id: l.id } });
-        await Promise.all(paths.map((p) => fs.rm(p, { force: true })));
+        await listingModel.deleteListing(listing.id);
+        await Promise.all(paths.map((filePath) => fs.rm(filePath, { force: true })));
       } else {
-        await prisma.listing.update({
-          where: { id: l.id },
-          data: { status: "removed", photoCheck: "passed" },
-        });
+        await listingModel.setRemovedAfterPhotoCheck(listing.id);
       }
 
-      await notify(l.sellerId, {
+      await notify(listing.sellerId, {
         type: "listing",
         title: "Your listing was removed",
-        body: `"${l.title}" was removed because photo ${first} doesn't look like a real car or bike photo. You can post it again with valid photos.`,
+        body: `"${listing.title}" was removed because photo ${first} doesn't look like a real car or bike photo. You can post it again with valid photos.`,
       });
       console.log(
-        `Photo recheck: removed "${l.title}" (photo ${first} rejected)`,
+        `Photo recheck: removed "${listing.title}" (photo ${first} rejected)`,
       );
     }
   } catch (e) {

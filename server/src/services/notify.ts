@@ -1,4 +1,6 @@
-import { prisma } from "./prisma.js";
+import * as notificationModel from "../models/notification.model.js";
+import { findNotifySwitches } from "../models/user.model.js";
+import { toNotification } from "../views/notification.view.js";
 import { emitToUser, isOnline } from "./realtime.js";
 import { sendPush } from "./push.js";
 
@@ -23,37 +25,22 @@ export async function notify(
 ) {
   try {
     // respect the user's Settings switch: if it's off, no notification at all
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { notifyScam: true, notifyEvidence: true },
-    });
+    const user = await findNotifySwitches(userId);
     if (!user || user[PREF[n.type]] === false) return null;
 
-    const row = await prisma.notification.create({
-      data: {
-        userId,
-        type: n.type,
-        title: n.title,
-        body: n.body,
-        data: n.data ?? undefined,
-      },
+    const row = await notificationModel.create({
+      userId,
+      type: n.type,
+      title: n.title,
+      body: n.body,
+      data: n.data,
     });
 
-    const unread = await prisma.notification.count({
-      where: { userId, readAt: null },
-    });
+    const unread = await notificationModel.countUnread(userId);
 
     // live update for the bell
     emitToUser(userId, "notification:new", {
-      notification: {
-        id: row.id,
-        type: row.type,
-        title: row.title,
-        body: row.body,
-        data: row.data,
-        createdAt: row.createdAt,
-        read: false,
-      },
+      notification: toNotification(row),
       unread,
     });
 

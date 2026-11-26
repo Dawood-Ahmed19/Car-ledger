@@ -1,3 +1,9 @@
+import type { IconName } from "@/constants/vehicle";
+import { useAuth } from "@/context/auth";
+import { api, assetUrl } from "@/lib/api";
+import { pickDocument, uploadEvidence } from "@/lib/evidence";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,12 +14,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { api, assetUrl } from "@/lib/api";
-import { useAuth } from "@/context/auth";
-import { pickDocument, uploadEvidence } from "@/lib/evidence";
-import type { IconName } from "@/constants/vehicle";
 
 type EvidenceListing = {
   id: string;

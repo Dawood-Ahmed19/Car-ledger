@@ -12,7 +12,7 @@ const HEADER_OFFSET = 70;
 export function NetworkBanner() {
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>("hidden");
-  const [label, setLabel] = useState<"offline" | "back">("offline"); // keeps the text steady while fading out
+  const [label, setLabel] = useState<"offline" | "back">("offline");
   const wasOffline = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const anim = useRef(new Animated.Value(0)).current;

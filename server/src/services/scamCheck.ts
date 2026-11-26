@@ -227,7 +227,7 @@ function underLimit(senderId: string | undefined): boolean {
   return true;
 }
 
-/* ---------- Public function used by routes/conversations.ts ---------- */
+/* ---------- Public function used by the conversation controller ---------- */
 
 export async function checkMessage(opts: {
   history: ChatMsg[]; // oldest first, latest LAST

@@ -1,6 +1,6 @@
 import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
-import { userFromToken } from "./session.js";
+import { findActiveUser } from "../models/session.model.js";
 
 let io: Server | null = null;
 
@@ -11,7 +11,7 @@ export function initRealtime(httpServer: HttpServer) {
   io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
     if (typeof token !== "string") return next(new Error("unauthorized"));
-    const user = await userFromToken(token);
+    const user = await findActiveUser(token);
     if (!user) return next(new Error("unauthorized"));
     socket.data.userId = user.id;
     next();
